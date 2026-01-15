@@ -349,6 +349,35 @@ export const removeParticipantFromChat = async (
 };
 
 /**
+ * Delete a chat and all its messages
+ */
+export const deleteChatAndMessages = async (chatId: string): Promise<void> => {
+  try {
+    // Get chat to determine type
+    const chat = await getChat(chatId);
+    if (!chat) {
+      throw new Error('Chat not found');
+    }
+
+    // Determine the collection based on chat type
+    const collectionName = chat.type === 'group' ? 'groups' : 'chats';
+
+    // First, delete all messages in the chat's messages subcollection
+    const messagesRef = collection(db, collectionName, chatId, 'messages');
+    const messagesSnapshot = await getDocs(messagesRef);
+    const deletePromises = messagesSnapshot.docs.map(doc => deleteDoc(doc.ref));
+    await Promise.all(deletePromises);
+
+    // Then delete the chat document
+    await deleteDoc(doc(db, 'chats', chatId));
+    console.log('✅ Chat and its messages deleted');
+  } catch (error) {
+    console.error('❌ Error deleting chat and messages:', error);
+    throw error;
+  }
+};
+
+/**
  * Delete a chat
  */
 export const deleteChat = async (chatId: string): Promise<void> => {
@@ -896,13 +925,13 @@ export const removeReactionFromMessage = async (
 /**
  * Subscribe to messages in a chat or group (real-time)
  */
-export const subscribeToMessages = async (
+export const subscribeToMessages = (
   chatId: string,
   callback: (messages: Message[]) => void,
-  limitCount?: number
+  limitCount?: number,
+  chat?: Chat | null
 ) => {
   // Determine the collection based on chat type
-  const chat = await getChat(chatId);
   const collectionName = chat?.type === 'group' ? 'groups' : 'chats';
 
   const messagesRef = collection(db, collectionName, chatId, 'messages');
